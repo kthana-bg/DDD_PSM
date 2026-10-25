@@ -1,0 +1,11 @@
+streamlit>=1.37
+streamlit-webrtc>=0.47
+opencv-python-headless>=4.9
+mediapipe>=0.10.30
+ai-edge-litert
+numpy
+pandas
+plotly
+reportlab
+twilio>=8.0.0
+piper-tts
