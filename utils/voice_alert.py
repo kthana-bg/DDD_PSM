@@ -1,6 +1,8 @@
 import base64
+import io
 import os
 import time
+import wave
 
 import streamlit as st
 from utils.html_embed import embed
@@ -8,6 +10,8 @@ from utils.html_embed import embed
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VOICE_DIR = os.path.join(_ROOT, "assets", "voice")
 CLIPS_DIR = os.path.join(VOICE_DIR, "clips")
+MODEL_PATH = os.path.join(VOICE_DIR, "visionmate-voice.onnx")
+DEFAULT_LENGTH_SCALE = 0.92    # below 1.0 speaks a little faster and firmer
 
 DEFAULT_MIN_INTERVAL = 30      # seconds between spoken Warning messages
 DANGER_MIN_INTERVAL = 10       # seconds between spoken Danger messages
@@ -71,11 +75,42 @@ def clips_available():
         return False
 
 
+@st.cache_resource(show_spinner="Loading voice model...")
+def _load_voice():
+    if not os.path.isfile(MODEL_PATH):
+        raise FileNotFoundError(MODEL_PATH)
+    from piper import PiperVoice  # imported here so the app still starts without Piper
+    return PiperVoice.load(MODEL_PATH)
+
+
+def _onnx_error():
+    """None if the .onnx voice can be used, otherwise a short reason."""
+    if not os.path.isfile(MODEL_PATH):
+        return "visionmate-voice.onnx is not in assets/voice/."
+    try:
+        _load_voice()
+        return None
+    except ImportError:
+        return "The piper-tts package is not installed."
+    except Exception as e:  # noqa: BLE001
+        return f"The voice model could not be loaded: {e}"
+
+
 def voice_error():
-    """Returns None if voice guidance is usable, otherwise a short reason string."""
-    if not clips_available():
-        return "No voice clips found in assets/voice/clips/."
-    return None
+    """Returns None if voice guidance is usable (.onnx voice or wav clips), otherwise a short reason."""
+    if _onnx_error() is None or clips_available():
+        return None
+    return "No voice found. Put visionmate-voice.onnx (and its .json) in assets/voice/, or wav clips in assets/voice/clips/."
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def _synthesize_b64(text, length_scale):
+    from piper import SynthesisConfig
+    voice = _load_voice()
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        voice.synthesize_wav(text, wf, syn_config=SynthesisConfig(length_scale=length_scale))
+    return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 @st.cache_data(show_spinner=False, max_entries=16)
@@ -118,12 +153,32 @@ def _setting(key, default):
 
 
 def speak_clip(key, force_volume=None):
+    """Play one clip in the browser. Returns False if the clip file does not exist."""
     b64 = _clip_b64(key)
     if b64 is None:
         return False
     volume = (force_volume if force_volume is not None else _setting("voice_volume", DEFAULT_VOLUME)) / 100.0
     embed(build_player_html(b64, volume), height=0)
     return True
+
+
+def speak_text(text, force_volume=None):
+    """Say one sentence with the .onnx voice. Returns False if that voice is not usable."""
+    if _onnx_error() is not None:
+        return False
+    try:
+        b64 = _synthesize_b64(text, float(_setting("voice_length_scale", DEFAULT_LENGTH_SCALE)))
+    except Exception as e:  # noqa: BLE001
+        print(f"[VOICE] synthesis failed: {e}")
+        return False
+    volume = (force_volume if force_volume is not None else _setting("voice_volume", DEFAULT_VOLUME)) / 100.0
+    embed(build_player_html(b64, volume), height=0)
+    return True
+
+
+def _say(level, reasons, key, text):
+    """The .onnx voice first, the wav clip second."""
+    return speak_text(text) or speak_clip(key)
 
 
 def maybe_speak_alert(level, full_name=None, reasons=None):
@@ -143,9 +198,10 @@ def maybe_speak_alert(level, full_name=None, reasons=None):
         return False
 
     key = clip_key(level, reasons)
-    if not speak_clip(key):
+    text = build_message(level, reasons=reasons)
+    if not _say(level, reasons, key, text):
         return False
-    st.session_state["voice_last_text"] = build_message(level, reasons=reasons)
+    st.session_state["voice_last_text"] = text
     st.session_state["voice_last_spoken"] = now
     st.session_state["voice_last_level"] = level
     st.session_state["voice_msg_counter"] = _setting("voice_msg_counter", 0) + 1
@@ -160,9 +216,15 @@ def render_voice_controls():
             st.session_state["voice_enabled"] = False
             st.warning(f"Voice guidance is unavailable. {err} The beep alert still works.")
             return
-        missing = missing_clips()
-        if missing:
-            st.warning("Some voice clips are missing: " + ", ".join(missing))
+        if _onnx_error() is None:
+            st.caption("Voice: visionmate-voice.onnx")
+            st.slider("Speaking speed (lower is faster)", 0.7, 1.3, DEFAULT_LENGTH_SCALE, 0.02,
+                      key="voice_length_scale")
+        else:
+            st.caption("Voice: pre-recorded clips")
+            missing = missing_clips()
+            if missing:
+                st.warning("Some voice clips are missing: " + ", ".join(missing))
 
         st.toggle("Speak drowsiness alerts", value=True, key="voice_enabled")
         st.slider("Volume", 0, 100, DEFAULT_VOLUME, key="voice_volume")
@@ -170,7 +232,7 @@ def render_voice_controls():
                   key="voice_min_interval")
 
         if st.button("Test voice", key="voice_test"):
-            speak_clip("test")
+            speak_text(TEST_MESSAGE) or speak_clip("test")
 
         last = st.session_state.get("voice_last_text")
         if last:
