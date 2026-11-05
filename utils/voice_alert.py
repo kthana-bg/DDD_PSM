@@ -13,7 +13,7 @@ CLIPS_DIR = os.path.join(VOICE_DIR, "clips")
 MODEL_PATH = os.path.join(VOICE_DIR, "visionmate-voice.onnx")
 DEFAULT_LENGTH_SCALE = 0.92    # below 1.0 speaks a little faster and firmer
 
-DEFAULT_MIN_INTERVAL = 30      # seconds between spoken Warning messages
+DEFAULT_MIN_INTERVAL = 20      # seconds between spoken Warning messages
 DANGER_MIN_INTERVAL = 10       # seconds between spoken Danger messages
 DEFAULT_VOLUME = 90            # percent
 
