@@ -6,7 +6,7 @@ import streamlit as st
 from database.db_manager import end_session, save_event, save_metric, start_session
 from views.trip_analytics_tab import render_trip_summary
 from views.ui import banner, button, card, gauge, level_color, plot
-from utils.alerts import AlertManager, play_alert
+from utils.alerts import AlertManager, play_alert, stop_alert
 from utils.drowsiness_features import SENSITIVITY
 from utils.mobile_support import keep_awake, notify_alert, render_notification_button
 from utils.model_loader import BASELINE, DESCRIPTIONS, MODEL_ORDER, available_models, default_model
@@ -148,10 +148,12 @@ def _handle_result(proc, res: FrameResult, user: dict):
         st.session_state["last_metric_save"] = now
     level = res.level if res.status in ("Monitoring", "No face") else "Alert"
     kind = st.session_state["alert_mgr"].update(level)
+    if st.session_state["alert_mgr"].pop_cleared():
+        stop_alert()
     if kind:
         if st.session_state["sound_on"]:
             play_alert(kind, st.session_state["volume"])
-        maybe_speak_alert(level, (user or {}).get("full_name"))
+        maybe_speak_alert(level, (user or {}).get("full_name"), res.reasons)
         if kind == "loud":
             notify_alert("VisionMate: DANGER", "You look very drowsy. Pull over safely and rest.",
                          vibrate=st.session_state.get("vibrate_enabled", True))
