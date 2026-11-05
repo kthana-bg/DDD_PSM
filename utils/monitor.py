@@ -152,6 +152,8 @@ class DriverMonitor:
                 closed = p >= self.classifier.threshold
         if closed is None:
             closed = res.ear < th.ear_closed
+        elif closed and res.ear > th.ear_closed * 1.3:
+            closed = False
         res.eye_closed = bool(closed)
         st = self.fusion.update(res.eye_closed, res.mar, res.pitch, t)
         res.status, res.level, res.score, res.reasons = "Monitoring", st.level, st.score, list(st.reasons)
