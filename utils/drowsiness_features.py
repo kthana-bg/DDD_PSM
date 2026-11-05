@@ -116,20 +116,29 @@ class TFLiteEyeClassifier:
 # ---- temporal indicators ----------------------------------------------------------------------
 class PerclosTracker:
     """PERCLOS = fraction of the last `window_s` seconds the eyes were closed (time-weighted)."""
-    def __init__(self, window_s: float = 30.0, max_gap_s: float = 1.0, blink_s: float = 0.4):
-        self.window_s, self.max_gap_s, self.blink_s, self.buf = window_s, max_gap_s, blink_s, deque()   # (t, closed)
+    def __init__(self, window_s: float = 30.0, max_gap_s: float = 1.0, blink_s: float = 0.4, reopen_s: float = 0.2):
+        self.window_s, self.max_gap_s, self.blink_s, self.reopen_s = window_s, max_gap_s, blink_s, reopen_s
+        self.buf = deque()   # (t, closed)
         self.closed_since: Optional[float] = None
+        self._last_closed_t: Optional[float] = None
         self._last_t: Optional[float] = None
 
     def update(self, closed: bool, t: Optional[float] = None) -> float:
-        """Closures shorter than `blink_s` are normal blinks and are not counted. After a long gap between
-        frames (lag) a running closure is restarted, because we cannot know what happened in the gap."""
+        """Closures shorter than `blink_s` are normal blinks and are not counted. A single open frame inside a
+        closure (landmark jitter) shorter than `reopen_s` does not end it. After a long gap between frames (lag)
+        a running closure is restarted, because we cannot know what happened in the gap."""
         t = time.time() if t is None else t
         if self._last_t is not None and t - self._last_t > self.max_gap_s:
-            self.closed_since = None
+            self.closed_since = self._last_closed_t = None
         self._last_t = t
-        self.closed_since = (self.closed_since if self.closed_since is not None else t) if closed else None
-        counted = bool(closed) and (t - self.closed_since) >= self.blink_s
+        if closed:
+            if self.closed_since is None: self.closed_since = t
+            self._last_closed_t = t
+        elif self.closed_since is not None and self._last_closed_t is not None and t - self._last_closed_t < self.reopen_s:
+            closed = True                                  # brief open flicker inside a closure
+        else:
+            self.closed_since = self._last_closed_t = None
+        counted = bool(closed) and self.closed_since is not None and (self._last_closed_t - self.closed_since) >= self.blink_s
         self.buf.append((t, counted))
         while self.buf and t - self.buf[0][0] > self.window_s: self.buf.popleft()
         return self.perclos
@@ -233,10 +242,10 @@ class DrowsinessFusion:
 
 
 SENSITIVITY = {
-    # how long the eyes must stay closed before a Danger alert fires
-    "Low (fewer alerts)":     dict(perclos_alert=0.30, microsleep_s=4.0, warn_score=40.0, danger_score=70.0),
-    "Normal":                 dict(perclos_alert=0.20, microsleep_s=3.0, warn_score=30.0, danger_score=60.0),
-    "High (earlier alerts)":  dict(perclos_alert=0.15, microsleep_s=2.0, warn_score=25.0, danger_score=50.0),
+    # microsleep_s = how long the eyes must stay closed (seconds) before a Danger alert fires
+    "Low (fewer alerts)":     dict(perclos_alert=0.30, microsleep_s=3.0, warn_score=40.0, danger_score=70.0),
+    "Normal":                 dict(perclos_alert=0.20, microsleep_s=2.0, warn_score=30.0, danger_score=60.0),
+    "High (earlier alerts)":  dict(perclos_alert=0.15, microsleep_s=1.5, warn_score=25.0, danger_score=50.0),
 }
 
 
