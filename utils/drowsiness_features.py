@@ -1,15 +1,3 @@
-"""
-Drowsiness indicators and fusion for the Driver Drowsiness Detection System.
-
-Replaces the eye-strain / posture logic of VisionMate. Pure NumPy/OpenCV so it is unit-testable
-without a camera. MediaPipe Face Landmarker supplies the 468 landmarks (same as before).
-
-Indicators
-  EAR      eye aspect ratio                      -> geometric eye openness
-  PERCLOS  % of time eyes are closed (window)    -> fed by EAR *or* by the trained CNN (P(closed))
-  MAR      mouth aspect ratio                    -> yawning
-  pitch    head-pose angle (solvePnP)            -> nodding / head drooping
-"""
 from __future__ import annotations
 import time
 from collections import deque
@@ -128,15 +116,22 @@ class TFLiteEyeClassifier:
 # ---- temporal indicators ----------------------------------------------------------------------
 class PerclosTracker:
     """PERCLOS = fraction of the last `window_s` seconds the eyes were closed (time-weighted)."""
-    def __init__(self, window_s: float = 30.0, max_gap_s: float = 1.0):
-        self.window_s, self.max_gap_s, self.buf = window_s, max_gap_s, deque()   # (t, closed)
+    def __init__(self, window_s: float = 30.0, max_gap_s: float = 1.0, blink_s: float = 0.4):
+        self.window_s, self.max_gap_s, self.blink_s, self.buf = window_s, max_gap_s, blink_s, deque()   # (t, closed)
         self.closed_since: Optional[float] = None
+        self._last_t: Optional[float] = None
 
     def update(self, closed: bool, t: Optional[float] = None) -> float:
+        """Closures shorter than `blink_s` are normal blinks and are not counted. After a long gap between
+        frames (lag) a running closure is restarted, because we cannot know what happened in the gap."""
         t = time.time() if t is None else t
-        self.buf.append((t, bool(closed)))
-        while self.buf and t - self.buf[0][0] > self.window_s: self.buf.popleft()
+        if self._last_t is not None and t - self._last_t > self.max_gap_s:
+            self.closed_since = None
+        self._last_t = t
         self.closed_since = (self.closed_since if self.closed_since is not None else t) if closed else None
+        counted = bool(closed) and (t - self.closed_since) >= self.blink_s
+        self.buf.append((t, counted))
+        while self.buf and t - self.buf[0][0] > self.window_s: self.buf.popleft()
         return self.perclos
 
     @property
@@ -180,8 +175,9 @@ class Thresholds:
     pitch_nod: float = 15.0       # degrees below the driver's neutral pitch
     yawn_hold_s: float = 1.2
     nod_hold_s: float = 1.0
-    perclos_alert: float = 0.15   # PERCLOS at which the eye component saturates (0.15-0.25 in the literature)
-    microsleep_s: float = 1.5     # continuous closure treated as danger immediately
+    perclos_alert: float = 0.20   # PERCLOS at which the eye component saturates (0.15-0.25 in the literature)
+    microsleep_s: float = 2.0     # continuous eye closure (seconds) that raises Danger immediately
+    blink_s: float = 0.4          # closures shorter than this are normal blinks and are ignored
     warn_score: float = 30.0
     danger_score: float = 60.0
     pitch_neutral: float = 0.0
@@ -211,11 +207,11 @@ class DrowsinessFusion:
     """Transparent rule-based fusion of the four indicators -> score 0-100 and a graded alert level.
     Weights are design choices (eye 0.5, yawn 0.25, head 0.25); tune them on the validation videos."""
     def __init__(self, th: Thresholds = Thresholds(), window_s: float = 30.0):
-        self.th, self.perclos = th, PerclosTracker(window_s)
+        self.th, self.perclos = th, PerclosTracker(window_s, blink_s=th.blink_s)
         self.yawn, self.nod = HoldTrigger(th.yawn_hold_s), HoldTrigger(th.nod_hold_s)
 
     def set_thresholds(self, th: Thresholds):
-        self.th = th; self.yawn.min_s = th.yawn_hold_s; self.nod.min_s = th.nod_hold_s
+        self.th = th; self.yawn.min_s = th.yawn_hold_s; self.nod.min_s = th.nod_hold_s; self.perclos.blink_s = th.blink_s
 
     def lost_face(self):
         """Face not visible: stop the running closure / yawn / nod timers (counts are kept)."""
@@ -237,9 +233,10 @@ class DrowsinessFusion:
 
 
 SENSITIVITY = {
-    "Low (fewer alerts)":     dict(perclos_alert=0.25, microsleep_s=2.0, warn_score=40.0, danger_score=70.0),
-    "Normal":                 dict(perclos_alert=0.15, microsleep_s=1.5, warn_score=30.0, danger_score=60.0),
-    "High (earlier alerts)":  dict(perclos_alert=0.10, microsleep_s=1.0, warn_score=25.0, danger_score=50.0),
+    # microsleep_s = how long the eyes must stay closed (seconds) before a Danger alert fires
+    "Low (fewer alerts)":     dict(perclos_alert=0.30, microsleep_s=3.0, warn_score=40.0, danger_score=70.0),
+    "Normal":                 dict(perclos_alert=0.20, microsleep_s=2.0, warn_score=30.0, danger_score=60.0),
+    "High (earlier alerts)":  dict(perclos_alert=0.15, microsleep_s=1.5, warn_score=25.0, danger_score=50.0),
 }
 
 
