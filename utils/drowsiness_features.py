@@ -245,7 +245,7 @@ SENSITIVITY = {
     # microsleep_s = how long the eyes must stay closed (seconds) before a Danger alert fires
     "Low (fewer alerts)":     dict(perclos_alert=0.30, microsleep_s=2.5, warn_score=40.0, danger_score=70.0),
     "Normal":                 dict(perclos_alert=0.20, microsleep_s=1.5, warn_score=30.0, danger_score=60.0),
-    "High (earlier alerts)":  dict(perclos_alert=0.15, microsleep_s=1.2, warn_score=25.0, danger_score=50.0),
+    "High (earlier alerts)":  dict(perclos_alert=0.15, microsleep_s=0.8, warn_score=25.0, danger_score=50.0),
 }
 
 
