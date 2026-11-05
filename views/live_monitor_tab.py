@@ -18,7 +18,7 @@ CAMERA_PRESETS = {
     "Battery saver (480x360)": (480, 360, 15),
     "Low (320x240)": (320, 240, 10),
 }
-POLL_SECONDS = 0.7
+POLL_SECONDS = 0.5
 METRIC_EVERY_S = 2.0
 
 
