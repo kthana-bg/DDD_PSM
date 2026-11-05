@@ -185,7 +185,7 @@ class Thresholds:
     yawn_hold_s: float = 1.2
     nod_hold_s: float = 1.0
     perclos_alert: float = 0.20   # PERCLOS at which the eye component saturates (0.15-0.25 in the literature)
-    microsleep_s: float = 2.0     # continuous eye closure (seconds) that raises Danger immediately
+    microsleep_s: float = 1.5     # continuous eye closure (seconds) that raises Danger immediately
     blink_s: float = 0.4          # closures shorter than this are normal blinks and are ignored
     warn_score: float = 30.0
     danger_score: float = 60.0
@@ -243,9 +243,9 @@ class DrowsinessFusion:
 
 SENSITIVITY = {
     # microsleep_s = how long the eyes must stay closed (seconds) before a Danger alert fires
-    "Low (fewer alerts)":     dict(perclos_alert=0.30, microsleep_s=3.0, warn_score=40.0, danger_score=70.0),
-    "Normal":                 dict(perclos_alert=0.20, microsleep_s=2.0, warn_score=30.0, danger_score=60.0),
-    "High (earlier alerts)":  dict(perclos_alert=0.15, microsleep_s=1.5, warn_score=25.0, danger_score=50.0),
+    "Low (fewer alerts)":     dict(perclos_alert=0.30, microsleep_s=2.5, warn_score=40.0, danger_score=70.0),
+    "Normal":                 dict(perclos_alert=0.20, microsleep_s=1.5, warn_score=30.0, danger_score=60.0),
+    "High (earlier alerts)":  dict(perclos_alert=0.15, microsleep_s=1.2, warn_score=25.0, danger_score=50.0),
 }
 
 
