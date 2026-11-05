@@ -122,7 +122,7 @@ def _clip_b64(key):
         return base64.b64encode(f.read()).decode("ascii")
 
 
-def build_player_html(b64_wav, volume=0.9, delay_ms=600):
+def build_player_html(b64_wav, volume=0.9, delay_ms=700):
     """HTML snippet that plays the clip on the parent page so it survives Streamlit reruns.
 
     The short delay lets the existing alert beep finish first. If the browser blocks access to
