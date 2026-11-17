@@ -1,4 +1,4 @@
-"""Face landmark provider (MediaPipe Face Landmarker, Tasks API)."""
+# face landmark provider like MediaPipe
 import os
 import threading
 import urllib.request
