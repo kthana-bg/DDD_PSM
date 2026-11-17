@@ -14,7 +14,6 @@ from views.live_monitor_tab import render_live_tab
 from views.model_comparison_tab import render_comparison_tab
 from views.trip_analytics_tab import render_analytics_tab
 from views.ui import APP_NAME, APP_TAGLINE, button, inject_css
-from views.video_test_tab import render_video_test_tab
 from utils.mobile_support import inject_head_tags
 
 inject_css()
@@ -52,13 +51,11 @@ def main():
         return
     render_header()
     user_id = st.session_state["user_id"]
-    t_live, t_hist, t_cmp, t_vid = st.tabs(["Live Monitor", "Trip History", "Model Comparison", "Video Test"])
+    t_live, t_hist, t_cmp = st.tabs(["Live Monitor", "Trip History", "Model Comparison"])
     with t_hist:
         render_analytics_tab(user_id)
     with t_cmp:
         render_comparison_tab()
-    with t_vid:
-        render_video_test_tab()
     with t_live:
         render_live_tab(user_id)
 
