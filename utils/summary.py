@@ -1,4 +1,4 @@
-"""Trip summary computed from the stored metrics and events of one session."""
+# trip summary
 from datetime import datetime
 from typing import List
 
