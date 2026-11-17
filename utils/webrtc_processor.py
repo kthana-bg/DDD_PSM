@@ -1,4 +1,3 @@
-"""streamlit-webrtc video processor wrapping DriverMonitor (runs in the WebRTC worker thread)."""
 import threading
 import time
 
