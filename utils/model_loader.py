@@ -1,4 +1,4 @@
-"""Eye-state models (.tflite) and their saved evaluation results."""
+# load the models and their evaluation results
 import json
 import os
 from typing import Dict, Optional
