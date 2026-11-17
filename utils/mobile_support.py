@@ -13,10 +13,6 @@ def _js_string(value):
     """Safely embed a Python string inside a JavaScript snippet."""
     return json.dumps(str(value)).replace("</", "<\\/")
 
-
-# ----------------------------------------------------------------------------
-# HTML builders
-# ----------------------------------------------------------------------------
 def build_head_tags_html():
     return """
     <script>
@@ -160,9 +156,7 @@ def build_notification_button_html():
     """
 
 
-# ----------------------------------------------------------------------------
 # Streamlit-facing API
-# ----------------------------------------------------------------------------
 def inject_head_tags():
     """Once per session: add mobile/home-screen metadata to the page head."""
     if st.session_state.get("_dg_head_tags_done"):
