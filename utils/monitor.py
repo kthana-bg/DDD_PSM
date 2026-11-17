@@ -1,4 +1,3 @@
-"""Per-frame drowsiness pipeline: landmarks -> indicators -> fusion -> annotated frame."""
 import time
 from collections import deque
 from dataclasses import dataclass, field
