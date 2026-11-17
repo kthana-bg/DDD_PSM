@@ -98,12 +98,8 @@ def render_trip_summary(session_id: int, key: str = "sum"):
         d["perclos"] = (d["perclos"] * 100).round(0).astype(int).astype(str) + "%"
         d.columns = ["Time", "Level", "Cause", "Score", "PERCLOS"]
         table(d)
-    cols = st.columns(2)
-    with cols[0]:
-        download_button("Download trip report (PDF)", build_trip_pdf(session, s, metrics, events, (st.session_state.get("user") or {}).get("full_name", "")),
-                        f"trip_{session_id}_report.pdf", mime="application/pdf", key=f"{key}_pdf")
-    with cols[1]:
-        download_button("Download samples (CSV)", m.drop(columns=["time"]).to_csv(index=False), f"trip_{session_id}_samples.csv", key=f"{key}_dl1")
+    download_button("Download trip report (PDF)", build_trip_pdf(session, s, metrics, events, (st.session_state.get("user") or {}).get("full_name", "")),
+                    f"trip_{session_id}_report.pdf", mime="application/pdf", key=f"{key}_pdf")
 
 
 def render_analytics_tab(user_id: int):
