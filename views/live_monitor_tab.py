@@ -152,7 +152,6 @@ def _handle_result(proc, res: FrameResult, user: dict):
         stop_alert()
         st.session_state["voice_last_level"] = "Alert"
         st.session_state["voice_last_spoken"] = 0
-        st.session_state["voice_beep_count"] = 0
     if kind:
         if st.session_state["sound_on"]:
             play_alert(kind, st.session_state["volume"])
