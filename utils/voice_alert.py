@@ -13,8 +13,6 @@ CLIPS_DIR = os.path.join(VOICE_DIR, "clips")
 MODEL_PATH = os.path.join(VOICE_DIR, "visionmate-voice.onnx")
 DEFAULT_LENGTH_SCALE = 0.92    # below 1.0 speaks a little faster and firmer
 
-SPEAK_EVERY_N_BEEPS = 1        # 1 = the voice follows every beep (change here, not in the interface)
-MIN_GAP_S = 3.0                # never start two spoken messages closer than this
 DEFAULT_VOLUME = 90            # percent
 
 MESSAGES = {
@@ -126,7 +124,7 @@ def _clip_b64(key):
         return base64.b64encode(f.read()).decode("ascii")
 
 
-def build_player_html(b64_wav, volume=0.9, delay_ms=700):
+def build_player_html(b64_wav, volume=0.9, delay_ms=400):
     """HTML snippet that plays the clip on the parent page so it survives Streamlit reruns.
 
     The short delay lets the existing alert beep finish first. If the browser blocks access to
@@ -185,36 +183,36 @@ def _say(level, reasons, key, text):
     return speak_text(text) or speak_clip(key)
 
 
+def warm_up_voice():
+    """Make every message once ahead of time so the voice starts at the same moment as the beep."""
+    if _onnx_error() is not None or st.session_state.get("voice_warmed"):
+        return
+    length = float(_setting("voice_length_scale", DEFAULT_LENGTH_SCALE))
+    for text in list(MESSAGES.values()) + list(REMINDERS.values()) + [TEST_MESSAGE]:
+        try:
+            _synthesize_b64(text, length)
+        except Exception as e:  # noqa: BLE001
+            print(f"[VOICE] warm-up failed: {e}")
+            return
+    st.session_state["voice_warmed"] = True
+
+
 def maybe_speak_alert(level, full_name=None, reasons=None):
-    """Call this every time a beep plays. Decides whether the voice should speak with it.
+    """Call this every time a beep plays. The voice speaks with every beep.
 
     The full message is spoken when the level first appears or rises (Warning to Danger).
-    While the same level carries on, the voice follows every beep with a short reminder
-    (SPEAK_EVERY_N_BEEPS = 1; raise it to speak less often).
+    While the same level carries on, each beep gets a short reminder so it fits before the next beep.
     """
     if level not in ("Warning", "Danger") or not _setting("voice_enabled", True):
         return False
-    now = time.time()
     last_level = _setting("voice_last_level", "Alert")
     escalated = LEVEL_RANK[level] > LEVEL_RANK.get(last_level, 0)
-    if escalated:
-        count = 0
-    else:
-        count = _setting("voice_beep_count", 0) + 1
-        every = max(1, SPEAK_EVERY_N_BEEPS)
-        if count < every or now - _setting("voice_last_spoken", 0) < MIN_GAP_S:
-            st.session_state["voice_beep_count"] = count
-            return False
-
     key = clip_key(level, reasons)
-    full = build_message(level, reasons=reasons)
-    text = full if escalated else REMINDERS[level]
+    text = build_message(level, reasons=reasons) if escalated else REMINDERS[level]
     if not _say(level, reasons, key, text):
         return False
     st.session_state["voice_last_text"] = text
-    st.session_state["voice_last_spoken"] = now
     st.session_state["voice_last_level"] = level
-    st.session_state["voice_beep_count"] = 0
     st.session_state["voice_msg_counter"] = _setting("voice_msg_counter", 0) + 1
     return True
 
@@ -229,6 +227,7 @@ def render_voice_controls():
             return
         if _onnx_error() is None:
             st.caption("Voice: visionmate-voice.onnx")
+            warm_up_voice()
             st.slider("Speaking speed (lower is faster)", 0.7, 1.3, DEFAULT_LENGTH_SCALE, 0.02,
                       key="voice_length_scale")
         else:
