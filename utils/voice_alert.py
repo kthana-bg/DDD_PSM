@@ -13,7 +13,7 @@ CLIPS_DIR = os.path.join(VOICE_DIR, "clips")
 MODEL_PATH = os.path.join(VOICE_DIR, "visionmate-voice.onnx")
 DEFAULT_LENGTH_SCALE = 0.92    # below 1.0 speaks a little faster and firmer
 
-DEFAULT_EVERY_N_BEEPS = 2      # while the same level continues, speak again on every 2nd beep
+SPEAK_EVERY_N_BEEPS = 1        # 1 = the voice follows every beep (change here, not in the interface)
 MIN_GAP_S = 3.0                # never start two spoken messages closer than this
 DEFAULT_VOLUME = 90            # percent
 
@@ -189,8 +189,8 @@ def maybe_speak_alert(level, full_name=None, reasons=None):
     """Call this every time a beep plays. Decides whether the voice should speak with it.
 
     The full message is spoken when the level first appears or rises (Warning to Danger).
-    While the same level carries on, the beep keeps repeating and the voice comes back on
-    every Nth beep with a short reminder, so it never talks over every beep.
+    While the same level carries on, the voice follows every beep with a short reminder
+    (SPEAK_EVERY_N_BEEPS = 1; raise it to speak less often).
     """
     if level not in ("Warning", "Danger") or not _setting("voice_enabled", True):
         return False
@@ -201,7 +201,7 @@ def maybe_speak_alert(level, full_name=None, reasons=None):
         count = 0
     else:
         count = _setting("voice_beep_count", 0) + 1
-        every = max(1, int(_setting("voice_every_n", DEFAULT_EVERY_N_BEEPS)))
+        every = max(1, SPEAK_EVERY_N_BEEPS)
         if count < every or now - _setting("voice_last_spoken", 0) < MIN_GAP_S:
             st.session_state["voice_beep_count"] = count
             return False
@@ -239,8 +239,6 @@ def render_voice_controls():
 
         st.toggle("Speak drowsiness alerts", value=True, key="voice_enabled")
         st.slider("Volume", 0, 100, DEFAULT_VOLUME, key="voice_volume")
-        st.slider("Speak again every N beeps (while the alert continues)", 1, 5, DEFAULT_EVERY_N_BEEPS,
-                  key="voice_every_n")
 
         if st.button("Test voice", key="voice_test"):
             speak_text(TEST_MESSAGE) or speak_clip("test")
