@@ -5,7 +5,7 @@ from typing import Optional
 from utils.html_embed import embed
 
 WARN_REPEAT_S = 12.0
-DANGER_REPEAT_S = 5.0
+DANGER_REPEAT_S = 3.0
 _RANK = {"Alert": 0, "Warning": 1, "Danger": 2}
 
 
