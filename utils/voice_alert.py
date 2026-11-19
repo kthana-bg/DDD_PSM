@@ -13,8 +13,8 @@ CLIPS_DIR = os.path.join(VOICE_DIR, "clips")
 MODEL_PATH = os.path.join(VOICE_DIR, "visionmate-voice.onnx")
 DEFAULT_LENGTH_SCALE = 0.92    # below 1.0 speaks a little faster and firmer
 
-DEFAULT_MIN_INTERVAL = 20      # seconds between spoken Warning messages
-DANGER_MIN_INTERVAL = 10       # seconds between spoken Danger messages
+DEFAULT_EVERY_N_BEEPS = 2      # while the same level continues, speak again on every 2nd beep
+MIN_GAP_S = 3.0                # never start two spoken messages closer than this
 DEFAULT_VOLUME = 90            # percent
 
 MESSAGES = {
@@ -27,6 +27,10 @@ MESSAGES = {
     ("Danger", "yawn"): "Danger! You are exhausted. Pull over safely and rest now!",
     ("Danger", "nod"): "Danger! Your head is dropping. Pull over safely and rest now!",
     ("Danger", "mixed"): "Danger! You are too tired to drive. Pull over safely and rest now!",
+}
+REMINDERS = {
+    "Warning": "Please take a rest soon.",
+    "Danger": "Danger! Pull over safely and rest now!",
 }
 TEST_MESSAGE = "Voice guidance is on. I will tell you when you need to rest, and why."
 CLIP_KEYS = [f"{lvl.lower()}_{cause}" for (lvl, cause) in MESSAGES] + ["test"]
@@ -182,28 +186,35 @@ def _say(level, reasons, key, text):
 
 
 def maybe_speak_alert(level, full_name=None, reasons=None):
-    """Call this when the beep alert fires. Applies the on/off switch and the minimum interval.
+    """Call this every time a beep plays. Decides whether the voice should speak with it.
 
-    A Danger alert is allowed through sooner than a Warning, and a rise from Warning to Danger
-    is always spoken straight away.
+    The full message is spoken when the level first appears or rises (Warning to Danger).
+    While the same level carries on, the beep keeps repeating and the voice comes back on
+    every Nth beep with a short reminder, so it never talks over every beep.
     """
     if level not in ("Warning", "Danger") or not _setting("voice_enabled", True):
         return False
     now = time.time()
-    last_time = _setting("voice_last_spoken", 0)
     last_level = _setting("voice_last_level", "Alert")
     escalated = LEVEL_RANK[level] > LEVEL_RANK.get(last_level, 0)
-    interval = DANGER_MIN_INTERVAL if level == "Danger" else _setting("voice_min_interval", DEFAULT_MIN_INTERVAL)
-    if not escalated and now - last_time < interval:
-        return False
+    if escalated:
+        count = 0
+    else:
+        count = _setting("voice_beep_count", 0) + 1
+        every = max(1, int(_setting("voice_every_n", DEFAULT_EVERY_N_BEEPS)))
+        if count < every or now - _setting("voice_last_spoken", 0) < MIN_GAP_S:
+            st.session_state["voice_beep_count"] = count
+            return False
 
     key = clip_key(level, reasons)
-    text = build_message(level, reasons=reasons)
+    full = build_message(level, reasons=reasons)
+    text = full if escalated else REMINDERS[level]
     if not _say(level, reasons, key, text):
         return False
     st.session_state["voice_last_text"] = text
     st.session_state["voice_last_spoken"] = now
     st.session_state["voice_last_level"] = level
+    st.session_state["voice_beep_count"] = 0
     st.session_state["voice_msg_counter"] = _setting("voice_msg_counter", 0) + 1
     return True
 
@@ -228,8 +239,8 @@ def render_voice_controls():
 
         st.toggle("Speak drowsiness alerts", value=True, key="voice_enabled")
         st.slider("Volume", 0, 100, DEFAULT_VOLUME, key="voice_volume")
-        st.slider("Minimum seconds between Warning messages", 10, 120, DEFAULT_MIN_INTERVAL,
-                  key="voice_min_interval")
+        st.slider("Speak again every N beeps (while the alert continues)", 1, 5, DEFAULT_EVERY_N_BEEPS,
+                  key="voice_every_n")
 
         if st.button("Test voice", key="voice_test"):
             speak_text(TEST_MESSAGE) or speak_clip("test")
